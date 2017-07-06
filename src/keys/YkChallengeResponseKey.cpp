@@ -45,51 +45,31 @@ QByteArray YkChallengeResponseKey::rawKey() const
     return m_key;
 }
 
-/**
- * Assumes yubikey()->init() was called
- */
 bool YkChallengeResponseKey::challenge(const QByteArray& challenge)
 {
-    return this->challenge(challenge, 1);
-}
+    if (!YubiKey::instance()->init()) {
+        return false;
+    }
 
-bool YkChallengeResponseKey::challenge(const QByteArray& challenge, unsigned retries)
-{
-    Q_ASSERT(retries > 0);
+    if (m_blocking) {
+        emit userInteractionRequired();
+    }
 
-    do {
-        --retries;
+    QFuture<YubiKey::ChallengeResult> future = QtConcurrent::run([this, challenge]() {
+        return YubiKey::instance()->challenge(m_slot, true, challenge, m_key);
+    });
 
-        if (m_blocking) {
-            emit userInteractionRequired();
-        }
+    QEventLoop loop;
+    QFutureWatcher<YubiKey::ChallengeResult> watcher;
+    watcher.setFuture(future);
+    connect(&watcher, SIGNAL(finished()), &loop, SLOT(quit()));
+    loop.exec();
 
-        QFuture<YubiKey::ChallengeResult> future = QtConcurrent::run([this, challenge]() {
-            return YubiKey::instance()->challenge(m_slot, true, challenge, m_key);
-        });
+    if (m_blocking) {
+        emit userConfirmed();
+    }
 
-        QEventLoop loop;
-        QFutureWatcher<YubiKey::ChallengeResult> watcher;
-        watcher.setFuture(future);
-        connect(&watcher, SIGNAL(finished()), &loop, SLOT(quit()));
-        loop.exec();
-
-        if (m_blocking) {
-            emit userConfirmed();
-        }
-
-        if (future.result() != YubiKey::ERROR) {
-            return true;
-        }
-
-        // if challenge failed, retry to detect YubiKeys in the event the YubiKey was un-plugged and re-plugged
-        if (retries > 0 && YubiKey::instance()->init() != true) {
-            continue;
-        }
-
-    } while (retries > 0);
-
-    return false;
+    return future.result() != YubiKey::ERROR;
 }
 
 QString YkChallengeResponseKey::getName() const

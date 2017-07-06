@@ -34,7 +34,6 @@ public:
 
     QByteArray rawKey() const;
     bool challenge(const QByteArray& challenge);
-    bool challenge(const QByteArray& challenge, unsigned retries);
     QString getName() const;
     bool isBlocking() const;
 
