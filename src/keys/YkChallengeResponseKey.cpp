@@ -69,6 +69,7 @@ bool YkChallengeResponseKey::challenge(const QByteArray& challenge)
         emit userConfirmed();
     }
 
+    YubiKey::instance()->deinit();
     return future.result() != YubiKey::ERROR;
 }
 
